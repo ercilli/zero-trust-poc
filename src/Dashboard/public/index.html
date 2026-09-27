@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zero Trust M2M · Consola de Escenarios</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #8b93a3;
+    --green: #22c55e;
+    --red: #ef4444;
+    --gray: #4b5563;
+    --accent: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 0.9rem; }
+  .scenarios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  button.scenario-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-align: left;
+    min-width: 220px;
+    transition: border-color 0.15s;
+  }
+  button.scenario-btn:hover { border-color: var(--accent); }
+  button.scenario-btn:disabled { opacity: 0.5; cursor: wait; }
+  button.scenario-btn .letter {
+    display: inline-block;
+    width: 22px; height: 22px;
+    background: var(--accent);
+    color: #06222f;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 22px;
+    font-weight: 700;
+    margin-right: 8px;
+    font-size: 0.8rem;
+  }
+  button.scenario-btn .desc {
+    display: block;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 4px;
+    margin-left: 30px;
+  }
+  #result { display: none; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 0.95rem; margin: 0 0 10px; color: var(--accent); }
+  pre {
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .badge.ok { background: rgba(34,197,94,0.15); color: var(--green); border-color: var(--green); }
+  .badge.bad { background: rgba(239,68,68,0.15); color: var(--red); border-color: var(--red); }
+  .badge.neutral { background: rgba(139,147,163,0.15); color: var(--muted); }
+  .diagram {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .step {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    text-align: center;
+    min-width: 120px;
+    border: 2px solid var(--gray);
+    color: var(--muted);
+  }
+  .step.ok { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.08); }
+  .step.blocked { border-color: var(--red); color: var(--red); background: rgba(239,68,68,0.12); font-weight: 700; }
+  .step.unreached { border-color: var(--gray); color: var(--muted); opacity: 0.5; }
+  .arrow { color: var(--muted); font-size: 1.1rem; }
+  #loading { color: var(--muted); font-size: 0.85rem; display: none; }
+</style>
+</head>
+<body>
+  <h1>Zero Trust M2M · Consola de Escenarios</h1>
+  <div class="subtitle">mTLS (transporte) + OAuth 2.0 Client Credentials (aplicación) — ejecutá cada escenario contra la topología real en Docker.</div>
+
+  <div class="scenarios" id="scenario-buttons"></div>
+  <div id="loading">Ejecutando request…</div>
+
+  <div id="result">
+    <div class="panel">
+      <h2 id="result-title"></h2>
+      <p id="result-desc" style="color: var(--muted); font-size: 0.85rem; margin-top: -6px;"></p>
+      <div class="badges">
+        <span class="badge" id="badge-tls"></span>
+        <span class="badge" id="badge-http"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Comando curl equivalente</h2>
+      <pre id="curl-cmd"></pre>
+    </div>
+
+    <div class="panel">
+      <h2>Payload / Error devuelto</h2>
+      <pre id="response-body"></pre>
+    </div>
+
+    <div class="panel">
+      <h2>Diagrama: dónde se detuvo la petición</h2>
+      <div class="diagram" id="diagram"></div>
+    </div>
+  </div>
+
+<script>
+const buttonsEl = document.getElementById('scenario-buttons');
+const loadingEl = document.getElementById('loading');
+const resultEl = document.getElementById('result');
+
+async function loadScenarios() {
+  const res = await fetch('/api/scenarios');
+  const scenarios = await res.json();
+  buttonsEl.innerHTML = '';
+  scenarios.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'scenario-btn';
+    btn.innerHTML = `<span class="letter">${s.key}</span>${s.title.replace(/^Escenario \w: /, '')}<span class="desc">${s.description}</span>`;
+    btn.addEventListener('click', () => runScenario(s.key, btn));
+    buttonsEl.appendChild(btn);
+  });
+}
+
+function renderBadge(el, text, kind) {
+  el.textContent = text;
+  el.className = 'badge ' + kind;
+}
+
+function renderDiagram(steps) {
+  const diagramEl = document.getElementById('diagram');
+  diagramEl.innerHTML = '';
+  steps.forEach((step, i) => {
+    const div = document.createElement('div');
+    div.className = 'step ' + step.status;
+    div.textContent = step.label;
+    diagramEl.appendChild(div);
+    if (i < steps.length - 1) {
+      const arrow = document.createElement('div');
+      arrow.className = 'arrow';
+      arrow.textContent = '→';
+      diagramEl.appendChild(arrow);
+    }
+  });
+}
+
+async function runScenario(key, btn) {
+  const allButtons = document.querySelectorAll('.scenario-btn');
+  allButtons.forEach(b => b.disabled = true);
+  loadingEl.style.display = 'block';
+  resultEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/run/' + key, { method: 'POST' });
+    const data = await res.json();
+
+    document.getElementById('result-title').textContent = 'Resultado — Escenario ' + key;
+    document.getElementById('result-desc').textContent = data.error || '';
+    renderBadge(
+      document.getElementById('badge-tls'),
+      'Handshake TLS: ' + data.tls,
+      data.tls === 'Aceptado' ? 'ok' : (data.tls === 'N/A' ? 'neutral' : 'bad')
+    );
+    const code = parseInt(data.httpCode, 10);
+    renderBadge(
+      document.getElementById('badge-http'),
+      'HTTP ' + data.httpCode,
+      (code >= 200 && code < 300) ? 'ok' : 'bad'
+    );
+    document.getElementById('curl-cmd').textContent = data.curlCmd || '';
+
+    let bodyText = data.body || '(sin cuerpo de respuesta)';
+    try { bodyText = JSON.stringify(JSON.parse(data.body), null, 2); } catch {}
+    document.getElementById('response-body').textContent = bodyText;
+
+    renderDiagram(data.diagram || []);
+    resultEl.style.display = 'block';
+  } catch (err) {
+    alert('Error ejecutando el escenario: ' + err.message);
+  } finally {
+    allButtons.forEach(b => b.disabled = false);
+    loadingEl.style.display = 'none';
+  }
+}
+
+loadScenarios();
+</script>
+</body>
+</html>

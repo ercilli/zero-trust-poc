@@ -1,0 +1,134 @@
+{
+  "id": "zero-trust-realm",
+  "realm": "zero-trust-realm",
+  "displayName": "Zero Trust Security Realm",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      {
+        "name": "Payments.Write",
+        "description": "Permiso para procesar y mutar transacciones de pago"
+      },
+      {
+        "name": "Reports.Read",
+        "description": "Permiso de solo lectura para reportes y auditorías"
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "payments-audience",
+      "description": "Mapea estrictamente la audiencia hacia payments-api",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "payments-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "roles-flat",
+      "description": "Aplana los realm roles a un claim de nivel superior 'roles' para que el middleware JwtBearer de ASP.NET Core lo lea sin necesidad de parsear realm_access.roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-flat-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "payments-api",
+      "name": "Payments Resource Server",
+      "enabled": true,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "facturacion-service",
+      "name": "Servicio de Facturacion (Legitimo)",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret-facturacion-123",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "web-origins",
+        "roles",
+        "roles-flat",
+        "payments-audience"
+      ]
+    },
+    {
+      "clientId": "reportes-service",
+      "name": "Servicio de Reporteria (Restringido)",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret-reportes-123",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "web-origins",
+        "roles",
+        "roles-flat",
+        "payments-audience"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-facturacion-service",
+      "enabled": true,
+      "serviceAccountClientId": "facturacion-service",
+      "realmRoles": [
+        "Payments.Write"
+      ]
+    },
+    {
+      "username": "service-account-reportes-service",
+      "enabled": true,
+      "serviceAccountClientId": "reportes-service",
+      "realmRoles": [
+        "Reports.Read"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+# Certificados y llaves generadas por scripts/generate-certs.sh (PoC, regenerables con `make setup`)
+certs/*.key
+certs/*.crt
+certs/*.csr
+certs/*.srl
+certs/*.cnf
+
+# macOS
+.DS_Store
+
+# .NET
+src/PaymentsApi/bin/
+src/PaymentsApi/obj/
+
+# Node
+src/Dashboard/node_modules/
+src/Dashboard/npm-debug.log*

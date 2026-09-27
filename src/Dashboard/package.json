@@ -1,0 +1,16 @@
+{
+  "name": "zero-trust-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Consola de tests interactiva para la PoC Zero Trust M2M (mTLS + OAuth 2.0)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

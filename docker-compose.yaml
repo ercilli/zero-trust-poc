@@ -1,0 +1,66 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    command: start-dev --import-realm
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      # Fija el issuer del token a un valor único (el hostname interno de Docker),
+      # sin importar si el request llega desde localhost:8081 (host) o keycloak:8080
+      # (red interna). Sin esto, el `iss` del JWT varía según el Host header del
+      # caller y la validación de issuer en PaymentsApi falla con 401.
+      - KC_HOSTNAME=keycloak
+      - KC_HOSTNAME_PORT=8080
+      - KC_HOSTNAME_STRICT_HTTPS=false
+      - KC_HTTP_ENABLED=true
+    volumes:
+      - ./config/keycloak:/opt/keycloak/data/import
+    ports:
+      - "8081:8080"
+    networks:
+      - internal_vpc
+
+  payments-api:
+    build:
+      context: ./src/PaymentsApi
+      dockerfile: Dockerfile
+    networks:
+      - internal_vpc
+    environment:
+      - Jwt__Authority=http://keycloak:8080/realms/zero-trust-realm
+    depends_on:
+      - keycloak
+
+  proxy-servicio-b:
+    image: nginx:alpine
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    ports:
+      - "8443:443"
+    networks:
+      - internal_vpc
+    depends_on:
+      - payments-api
+
+  dashboard:
+    build:
+      context: ./src/Dashboard
+      dockerfile: Dockerfile
+    environment:
+      - PROXY_URL=https://proxy-servicio-b:443
+      - KEYCLOAK_TOKEN_URL=http://keycloak:8080/realms/zero-trust-realm/protocol/openid-connect/token
+      - CERTS_DIR=/certs
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - internal_vpc
+    depends_on:
+      - proxy-servicio-b
+      - keycloak
+
+networks:
+  internal_vpc:
+    driver: bridge
